@@ -71,16 +71,27 @@ pub async fn run<P: AsRef<Path> + TakeExt<PathBuf>>(
     println!("🤓  Intermediate checksums:");
     let mut prev_intermediate_checksums = String::new();
 
+    let checksums_intermediate_path = output_dir.join("checksums_intermediate.txt");
     File::options()
         .read(true)
         .write(true)
         .create(true)
-        .open(&output_dir.join("checksums_intermediate.txt"))?
-        .read_to_string(&mut prev_intermediate_checksums)?;
-    write_checksums(
-        &intermediate_wasm_paths,
-        &output_dir.join("checksums_intermediate.txt"),
-    )?;
+        .open(&checksums_intermediate_path)
+        .and_then(|mut file| file.read_to_string(&mut prev_intermediate_checksums))
+        .map_err(|err| {
+            anyhow::anyhow!(
+                "Failed read from \"{path}\":\n {err}",
+                path = checksums_intermediate_path.display(),
+                err = err,
+            )
+        })?;
+    write_checksums(&intermediate_wasm_paths, &checksums_intermediate_path).map_err(|err| {
+        anyhow::anyhow!(
+            "Failed write into \"{path}\":\n {err}",
+            path = checksums_intermediate_path.display(),
+            err = err,
+        )
+    })?;
 
     println!("🥸  Ahh I'm optimiziing");
     let final_wasm_paths = incremental_optimizations(
@@ -90,7 +101,14 @@ pub async fn run<P: AsRef<Path> + TakeExt<PathBuf>>(
     )?;
 
     println!("🤓  Final checksums:");
-    write_checksums(&final_wasm_paths, &output_dir.join("checksums.txt"))?;
+    let checksums_path = output_dir.join("checksums.txt");
+    write_checksums(&final_wasm_paths, &checksums_path).map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to write into \"{path}\":\n {err}",
+            path = checksums_path.display(),
+            err = err
+        )
+    })?;
 
     println!(
         "🫡  Done. Saved optimized artifacts to:\n   {}",
