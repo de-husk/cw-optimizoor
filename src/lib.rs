@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, Context, Error};
 use cargo::{core::Workspace, ops, util::interning::InternedString};
 use path_absolutize::Absolutize;
 
@@ -78,20 +78,14 @@ pub async fn run<P: AsRef<Path> + TakeExt<PathBuf>>(
         .create(true)
         .open(&checksums_intermediate_path)
         .and_then(|mut file| file.read_to_string(&mut prev_intermediate_checksums))
-        .map_err(|err| {
-            anyhow::anyhow!(
-                "Failed read from \"{path}\":\n {err}",
-                path = checksums_intermediate_path.display(),
-                err = err,
-            )
-        })?;
-    write_checksums(&intermediate_wasm_paths, &checksums_intermediate_path).map_err(|err| {
-        anyhow::anyhow!(
-            "Failed write into \"{path}\":\n {err}",
-            path = checksums_intermediate_path.display(),
-            err = err,
-        )
-    })?;
+        .context(format!(
+            "Failed read from {path}",
+            path = checksums_intermediate_path.display()
+        ))?;
+    write_checksums(&intermediate_wasm_paths, &checksums_intermediate_path).context(format!(
+        "Failed write into {path}",
+        path = checksums_intermediate_path.display()
+    ))?;
 
     println!("🥸  Ahh I'm optimiziing");
     let final_wasm_paths = incremental_optimizations(
@@ -102,13 +96,10 @@ pub async fn run<P: AsRef<Path> + TakeExt<PathBuf>>(
 
     println!("🤓  Final checksums:");
     let checksums_path = output_dir.join("checksums.txt");
-    write_checksums(&final_wasm_paths, &checksums_path).map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to write into \"{path}\":\n {err}",
-            path = checksums_path.display(),
-            err = err
-        )
-    })?;
+    write_checksums(&final_wasm_paths, &checksums_path).context(format!(
+        "Failed write into {path}",
+        path = checksums_path.display()
+    ))?;
 
     println!(
         "🫡  Done. Saved optimized artifacts to:\n   {}",
